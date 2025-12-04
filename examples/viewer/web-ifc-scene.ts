@@ -1,64 +1,114 @@
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+// @ts-nocheck
+
 import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-let scene;
-let camera;
-let renderer;
-let controls;
+export let scene: THREE.Scene;
+export let camera: THREE.PerspectiveCamera;
+export let renderer: THREE.WebGLRenderer;
+export let controls: OrbitControls;
 
-function Init3DView() {
-    scene =  new THREE.Scene();
-    renderer =  new THREE.WebGLRenderer({ antialias: true });
-    let obj = document.getElementById("3dcontainer") as any;
-    obj.appendChild(renderer.domElement);
-    camera =  new THREE.PerspectiveCamera(45,obj.clientWidth / obj.clientHeight,0.1,1000);;
-  renderer.setSize( obj.clientWidth - 20, obj.clientHeight - 20);
-  window.addEventListener('resize', onWindowResize, false );
+let container: HTMLDivElement | null = null;
+
+export function Init3DView() {
+  container = document.getElementById("3dcontainer") as HTMLDivElement | null;
+  if (!container) {
+    throw new Error("3dcontainer element not found");
+  }
+
+  scene = new THREE.Scene();
+
+  const { width, height } = getViewportSize();
+
+  camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 2000);
+  camera.position.set(25, 20, 25);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(width, height);
+
+  // Canvas fills entire container
+  renderer.domElement.style.position = "absolute";
+  renderer.domElement.style.top = "0";
+  renderer.domElement.style.left = "0";
+  renderer.domElement.style.width = "100%";
+  renderer.domElement.style.height = "100%";
+
+  container.style.position = "relative";
+  container.style.width = "100%";
+  container.style.height = "100%";
+  container.innerHTML = "";
+  container.appendChild(renderer.domElement);
 
   controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.target.set(0, 0, 0);
+  controls.update();
 
+  window.addEventListener("resize", onWindowResize);
 
-  scene.background = new THREE.Color(0x8cc7de);
+  animate();
+}
 
-  InitBasicScene();
+export function InitBasicScene() {
+  if (!scene) return;
 
-  camera.position.z = 5;
+  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambient);
 
-  AnimationLoop();
+  const directional = new THREE.DirectionalLight(0xffffff, 0.8);
+  directional.position.set(20, 40, 20);
+  scene.add(directional);
 }
 
 export function ClearScene() {
-  while(scene.children.length > 0) scene.remove(scene.children[0]); 
+  if (!scene) return;
+
+  for (let i = scene.children.length - 1; i >= 0; i--) {
+    const obj = scene.children[i];
+    scene.remove(obj);
+
+    const anyObj = obj as any;
+    if (anyObj.geometry) {
+      anyObj.geometry.dispose();
+    }
+    if (anyObj.material) {
+      if (Array.isArray(anyObj.material)) {
+        anyObj.material.forEach((m: THREE.Material) => m.dispose());
+      } else {
+        anyObj.material.dispose();
+      }
+    }
+  }
 }
 
-export function InitBasicScene()
-{
-  const directionalLight1 = new THREE.DirectionalLight(0xffeeff, 0.8);
-  directionalLight1.position.set(1, 1, 1);
-  scene.add(directionalLight1);
+function getViewportSize() {
+  const toolbar = document.querySelector(".toolbar") as HTMLElement | null;
+  const toolbarHeight = toolbar ? toolbar.clientHeight : 0;
 
-  const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight2.position.set(-1, 0.5, -1);
-  scene.add(directionalLight2);
+  const width = window.innerWidth;
+  const height = window.innerHeight - toolbarHeight;
 
-  const ambientLight = new THREE.AmbientLight(0xffffee, 0.25);
-  scene.add(ambientLight);
+  return { width, height };
 }
 
+function onWindowResize() {
+  if (!camera || !renderer) return;
 
-function onWindowResize(){
-    let obj = document.getElementById("3dcontainer") as any;
-    camera.aspect = renderer.domElement.innerWidth / renderer.domElement.innerWidth;
-    camera.updateProjectionMatrix();
+  const { width, height } = getViewportSize();
 
-    renderer.setSize( obj.clientWidth - 20, obj.clientHeight - 20);
-
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
 }
 
-function AnimationLoop() {
-  requestAnimationFrame(AnimationLoop);
-  controls.update();
-  renderer.render(scene, camera);
-}
+function animate() {
+  requestAnimationFrame(animate);
 
-export { scene, Init3DView };
+  if (controls) {
+    controls.update();
+  }
+  if (renderer && scene && camera) {
+    renderer.render(scene, camera);
+  }
+}
